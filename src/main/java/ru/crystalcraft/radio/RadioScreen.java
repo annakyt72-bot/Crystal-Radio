@@ -33,7 +33,7 @@ public final class RadioScreen extends Screen {
 
     @Override
     protected void init() {
-        refreshTracks();
+        loadTracks();
 
         int centerX = this.width / 2;
         int listWidth = Math.min(320, this.width - 40);
@@ -86,6 +86,11 @@ public final class RadioScreen extends Screen {
     }
 
     private void refreshTracks() {
+        loadTracks();
+        rebuildWidgets();
+    }
+
+    private void loadTracks() {
         try {
             Files.createDirectories(musicFolder);
             tracks.clear();
@@ -103,7 +108,6 @@ public final class RadioScreen extends Screen {
         } catch (IOException exception) {
             message = "Не удалось прочитать папку radio";
         }
-        if (this.minecraft != null) rebuildWidgets();
     }
 
     private boolean isAudioFile(Path path) {
