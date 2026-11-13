@@ -12,6 +12,7 @@ public final class MusicPlayer {
 
     private volatile SourceDataLine line;
     private volatile Thread worker;
+    private volatile long playbackId;
     private volatile boolean stopRequested;
     private volatile boolean paused;
     private volatile boolean playing;
@@ -29,13 +30,15 @@ public final class MusicPlayer {
         paused = false;
         playing = true;
         currentTrack = file;
+        long thisPlayback = ++playbackId;
 
-        worker = new Thread(() -> playFile(file), "CrystalRadio-Audio");
+        worker = new Thread(() -> playFile(file, thisPlayback), "CrystalRadio-Audio");
         worker.setDaemon(true);
         worker.start();
     }
 
-    private void playFile(Path file) {
+    private void playFile(Path file, long thisPlayback) {
+        SourceDataLine output = null;
         try (AudioInputStream source = AudioSystem.getAudioInputStream(file.toFile())) {
             AudioFormat sourceFormat = source.getFormat();
             AudioFormat pcmFormat = new AudioFormat(
@@ -50,40 +53,44 @@ public final class MusicPlayer {
 
             try (AudioInputStream decoded = AudioSystem.getAudioInputStream(pcmFormat, source)) {
                 DataLine.Info info = new DataLine.Info(SourceDataLine.class, pcmFormat);
-                SourceDataLine output = (SourceDataLine) AudioSystem.getLine(info);
+                output = (SourceDataLine) AudioSystem.getLine(info);
+                if (thisPlayback != playbackId || stopRequested) return;
                 line = output;
                 output.open(pcmFormat);
                 output.start();
 
                 byte[] buffer = new byte[8192];
                 int count;
-                while (!stopRequested && (count = decoded.read(buffer, 0, buffer.length)) != -1) {
-                    while (paused && !stopRequested) {
+                while (!stopRequested && thisPlayback == playbackId
+                        && (count = decoded.read(buffer, 0, buffer.length)) != -1) {
+                    while (paused && !stopRequested && thisPlayback == playbackId) {
                         Thread.sleep(50);
                     }
-                    if (!stopRequested) {
+                    if (!stopRequested && thisPlayback == playbackId) {
                         output.write(buffer, 0, count);
                     }
                 }
 
-                if (!stopRequested) {
+                if (!stopRequested && thisPlayback == playbackId) {
                     output.drain();
                 }
+            }
+        } catch (Exception exception) {
+            if (thisPlayback == playbackId && !stopRequested) {
+                System.err.println("[Crystal Radio] Could not play " + file + ": " + exception.getMessage());
+            }
+        } finally {
+            if (output != null) {
                 output.stop();
                 output.close();
             }
-        } catch (Exception exception) {
-            System.err.println("[Crystal Radio] Could not play " + file + ": " + exception.getMessage());
-        } finally {
-            SourceDataLine activeLine = line;
-            if (activeLine != null) {
-                activeLine.stop();
-                activeLine.close();
+            if (thisPlayback == playbackId) {
+                line = null;
+                playing = false;
+                paused = false;
+                currentTrack = null;
+                worker = null;
             }
-            line = null;
-            playing = false;
-            paused = false;
-            currentTrack = null;
         }
     }
 
@@ -98,17 +105,19 @@ public final class MusicPlayer {
     }
 
     public synchronized void stop() {
+        playbackId++;
         stopRequested = true;
         paused = false;
         SourceDataLine activeLine = line;
+        line = null;
         if (activeLine != null) {
             activeLine.stop();
             activeLine.flush();
             activeLine.close();
         }
-        line = null;
         playing = false;
         currentTrack = null;
+        worker = null;
     }
 
     public boolean isPlaying() {
