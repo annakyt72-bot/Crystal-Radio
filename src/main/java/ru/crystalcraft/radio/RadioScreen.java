@@ -53,7 +53,7 @@ public final class RadioScreen extends Screen {
         }).bounds(centerX - 55, this.height - 34, 24, 20).build());
 
         this.nextButton = this.addRenderableWidget(Button.builder(Component.literal(">"), button -> {
-            if ((page + 1) * PAGE_SIZE < tracks.size()) {
+            if (page < 3) {
                 page++;
                 rebuildWidgets();
             }
@@ -82,7 +82,7 @@ public final class RadioScreen extends Screen {
 
     private void updatePageButtons() {
         if (previousButton != null) previousButton.active = page > 0;
-        if (nextButton != null) nextButton.active = (page + 1) * PAGE_SIZE < tracks.size();
+        if (nextButton != null) nextButton.active = page < 3;
     }
 
     private void refreshTracks() {
@@ -101,7 +101,7 @@ public final class RadioScreen extends Screen {
                         path.getFileName().toString().toLowerCase(Locale.ROOT)))
                     .forEach(tracks::add);
             }
-            int maxPage = Math.max(0, (tracks.size() - 1) / PAGE_SIZE);
+            int maxPage = 3;
             page = Math.min(page, maxPage);
             message = tracks.isEmpty() ? "Папка radio пока пустая"
                 : "Найдено музыкальных файлов: " + tracks.size();
@@ -146,7 +146,7 @@ public final class RadioScreen extends Screen {
         super.render(graphics, mouseX, mouseY, delta);
         graphics.drawCenteredString(this.font, message, centerX, this.height - 58, 0xDDDDDD);
 
-        int totalPages = Math.max(1, (tracks.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+        int totalPages = 4;
         graphics.drawCenteredString(this.font, (page + 1) + " / " + totalPages,
             centerX, this.height - 12, 0xFFFFFF);
     }
