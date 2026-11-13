@@ -60,13 +60,13 @@ public final class RadioScreen extends Screen {
                 Component.literal(MusicPlayer.getInstance().isPaused() ? "▶" : "Ⅱ"),
                 button -> {
                     MusicPlayer.getInstance().togglePause();
-                    rebuildWidgets();
+                    rebuildRadioWidgets();
                 })
             .bounds(centerX - 52, this.height - 62, 44, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("■"), button -> {
                 MusicPlayer.getInstance().stop();
                 message = "Воспроизведение остановлено";
-                rebuildWidgets();
+                rebuildRadioWidgets();
             })
             .bounds(centerX - 4, this.height - 62, 44, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("⏭"), button -> playRelative(1))
@@ -75,13 +75,13 @@ public final class RadioScreen extends Screen {
         this.previousPageButton = this.addRenderableWidget(Button.builder(Component.literal("Стр. <"), button -> {
             if (page > 0) {
                 page--;
-                rebuildWidgets();
+                rebuildRadioWidgets();
             }
         }).bounds(centerX - 94, this.height - 34, 72, 20).build());
         this.nextPageButton = this.addRenderableWidget(Button.builder(Component.literal("Стр. >"), button -> {
             if (page < 3) {
                 page++;
-                rebuildWidgets();
+                rebuildRadioWidgets();
             }
         }).bounds(centerX + 22, this.height - 34, 72, 20).build());
         updatePageButtons();
@@ -103,10 +103,10 @@ public final class RadioScreen extends Screen {
         int next = Math.floorMod(index + direction, tracks.size());
         page = next / PAGE_SIZE;
         playTrack(tracks.get(next));
-        rebuildWidgets();
+        rebuildRadioWidgets();
     }
 
-    private void rebuildWidgets() {
+    private void rebuildRadioWidgets() {
         clearWidgets();
         init();
     }
@@ -118,7 +118,7 @@ public final class RadioScreen extends Screen {
 
     private void refreshTracks() {
         loadTracks();
-        rebuildWidgets();
+        rebuildRadioWidgets();
     }
 
     private void loadTracks() {
