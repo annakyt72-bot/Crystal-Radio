@@ -11,9 +11,19 @@ public final class CrystalRadioClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             dispatcher.register(literal("radio").executes(context -> {
-                Minecraft.getInstance().execute(() ->
-                    Minecraft.getInstance().setScreen(new RadioScreen())
-                );
+                Minecraft client = Minecraft.getInstance();
+
+                // Client commands may be invoked from a command callback.
+                // Always switch screens on the Minecraft client thread.
+                client.execute(() -> {
+                    try {
+                        client.setScreen(new RadioScreen());
+                    } catch (RuntimeException exception) {
+                        System.err.println("[Crystal Radio] Failed to open the radio screen.");
+                        exception.printStackTrace(System.err);
+                    }
+                });
+
                 return 1;
             }))
         );
