@@ -51,7 +51,7 @@ public final class RadioScreen extends Screen {
 
     private void createWidgets() {
         int centerX = this.width / 2;
-        int listWidth = Math.max(120, Math.min(340, this.width - 40));
+        int listWidth = Math.max(120, Math.min(300, this.width - 120));
         int left = centerX - listWidth / 2;
 
         this.addRenderableWidget(
@@ -262,8 +262,8 @@ public final class RadioScreen extends Screen {
         graphics.fill(0, 0, this.width, this.height, 0xE8050614);
 
         int centerX = this.width / 2;
-        int listWidth = Math.max(120, Math.min(340, this.width - 100));
-        int panelLeft = centerX - listWidth / 2 - 12;
+        int listWidth = Math.max(120, Math.min(300, this.width - 120));
+        int panelLeft = centerX - listWidth / 2 - 36;
         int panelRight = centerX + listWidth / 2 + 12;
 
         // CrystalCraft-inspired purple crystal panel with cyan accents.
@@ -334,7 +334,7 @@ public final class RadioScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int panelLeft = this.width / 2 - Math.max(120, Math.min(340, this.width - 100)) / 2 - 12;
+        int panelLeft = this.width / 2 - Math.max(120, Math.min(300, this.width - 120)) / 2 - 36;
         int volumeX = panelLeft + 18;
         int volumeTop = 132;
         int volumeBottom = volumeTop + Math.min(150, Math.max(90, this.height - 270));
