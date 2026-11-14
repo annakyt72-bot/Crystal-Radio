@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.awt.Desktop;
@@ -333,7 +334,11 @@ public final class RadioScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubleClick) {
+        double mouseX = click.x();
+        double mouseY = click.y();
+        int button = click.button();
+
         int panelLeft = this.width / 2 - Math.max(120, Math.min(300, this.width - 120)) / 2 - 36;
         int volumeX = panelLeft + 18;
         int volumeTop = 132;
@@ -358,27 +363,27 @@ public final class RadioScreen extends Screen {
             return true;
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubleClick);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (draggingVolume && button == 0) {
-            setVolumeFromMouse(mouseY);
+    public boolean mouseDragged(MouseButtonEvent click, double dragX, double dragY) {
+        if (draggingVolume && click.button() == 0) {
+            setVolumeFromMouse(click.y());
             return true;
         }
 
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(click, dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && draggingVolume) {
+    public boolean mouseReleased(MouseButtonEvent click) {
+        if (click.button() == 0 && draggingVolume) {
             draggingVolume = false;
             return true;
         }
 
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(click);
     }
 
     @Override
