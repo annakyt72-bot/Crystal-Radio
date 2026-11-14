@@ -86,7 +86,7 @@ public final class RadioScreen extends Screen {
 
         this.addRenderableWidget(
             Button.builder(Component.literal("⏮"), button -> playRelative(-1))
-                .bounds(centerX - 100, this.height - 62, 44, 20)
+                .bounds(centerX - 120, this.height - 62, 44, 20)
                 .build()
         );
 
@@ -98,7 +98,7 @@ public final class RadioScreen extends Screen {
                         rebuildRadioWidgets();
                     }
                 )
-                .bounds(centerX - 52, this.height - 62, 44, 20)
+                .bounds(centerX - 72, this.height - 62, 44, 20)
                 .build()
         );
 
@@ -108,13 +108,25 @@ public final class RadioScreen extends Screen {
                     message = "Воспроизведение остановлено";
                     rebuildRadioWidgets();
                 })
-                .bounds(centerX - 4, this.height - 62, 44, 20)
+                .bounds(centerX - 24, this.height - 62, 44, 20)
                 .build()
         );
 
         this.addRenderableWidget(
             Button.builder(Component.literal("⏭"), button -> playRelative(1))
-                .bounds(centerX + 44, this.height - 62, 44, 20)
+                .bounds(centerX + 24, this.height - 62, 44, 20)
+                .build()
+        );
+
+        this.addRenderableWidget(
+            Button.builder(
+                    Component.literal("Режим: " + MusicPlayer.getInstance().getPlaybackModeLabel()),
+                    button -> {
+                        MusicPlayer.getInstance().cyclePlaybackMode();
+                        rebuildRadioWidgets();
+                    }
+                )
+                .bounds(centerX + 72, this.height - 62, 90, 20)
                 .build()
         );
 
@@ -149,6 +161,7 @@ public final class RadioScreen extends Screen {
             return;
         }
 
+        MusicPlayer.getInstance().setPlaylist(tracks);
         MusicPlayer.getInstance().play(track);
         message = "Запуск: " + track.getFileName();
     }
@@ -212,6 +225,7 @@ public final class RadioScreen extends Screen {
                     .forEach(tracks::add);
             }
 
+            MusicPlayer.getInstance().setPlaylist(tracks);
             page = Math.min(page, getPageCount() - 1);
             message = tracks.isEmpty()
                 ? "Папка radio пока пустая"
