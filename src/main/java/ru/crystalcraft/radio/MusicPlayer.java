@@ -5,6 +5,7 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.SourceDataLine;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class MusicPlayer {
@@ -13,111 +14,187 @@ public final class MusicPlayer {
     private volatile SourceDataLine line;
     private volatile Thread worker;
     private volatile long playbackId;
-    private volatile boolean stopRequested;
     private volatile boolean paused;
     private volatile boolean playing;
     private volatile Path currentTrack;
 
-    private MusicPlayer() {}
+    private MusicPlayer() {
+    }
 
     public static MusicPlayer getInstance() {
         return INSTANCE;
     }
 
     public synchronized void play(Path file) {
+        if (file == null || !Files.isRegularFile(file)) {
+            System.err.println("[Crystal Radio] Track does not exist: " + file);
+            return;
+        }
+
         stop();
-        stopRequested = false;
-        paused = false;
-        playing = true;
-        currentTrack = file;
+
+        Path track = file.toAbsolutePath().normalize();
         long thisPlayback = ++playbackId;
 
-        worker = new Thread(() -> playFile(file, thisPlayback), "CrystalRadio-Audio");
-        worker.setDaemon(true);
-        worker.start();
+        paused = false;
+        playing = true;
+        currentTrack = track;
+
+        Thread newWorker = new Thread(
+            () -> playFile(track, thisPlayback),
+            "CrystalRadio-Audio"
+        );
+        newWorker.setDaemon(true);
+        worker = newWorker;
+        newWorker.start();
     }
 
     private void playFile(Path file, long thisPlayback) {
         SourceDataLine output = null;
+
         try (AudioInputStream source = AudioSystem.getAudioInputStream(file.toFile())) {
             AudioFormat sourceFormat = source.getFormat();
+
+            int channels = sourceFormat.getChannels() > 0
+                ? sourceFormat.getChannels()
+                : 2;
+            float sampleRate = sourceFormat.getSampleRate() > 0
+                ? sourceFormat.getSampleRate()
+                : 44100.0f;
+
             AudioFormat pcmFormat = new AudioFormat(
                 AudioFormat.Encoding.PCM_SIGNED,
-                sourceFormat.getSampleRate(),
+                sampleRate,
                 16,
-                sourceFormat.getChannels(),
-                sourceFormat.getChannels() * 2,
-                sourceFormat.getSampleRate(),
+                channels,
+                channels * 2,
+                sampleRate,
                 false
             );
 
             try (AudioInputStream decoded = AudioSystem.getAudioInputStream(pcmFormat, source)) {
                 DataLine.Info info = new DataLine.Info(SourceDataLine.class, pcmFormat);
                 output = (SourceDataLine) AudioSystem.getLine(info);
-                if (thisPlayback != playbackId || stopRequested) return;
-                line = output;
                 output.open(pcmFormat);
+
+                if (!isCurrentPlayback(thisPlayback)) {
+                    return;
+                }
+
+                line = output;
                 output.start();
 
                 byte[] buffer = new byte[8192];
                 int count;
-                while (!stopRequested && thisPlayback == playbackId
-                        && (count = decoded.read(buffer, 0, buffer.length)) != -1) {
-                    while (paused && !stopRequested && thisPlayback == playbackId) {
+
+                while (isCurrentPlayback(thisPlayback)) {
+                    while (paused && isCurrentPlayback(thisPlayback)) {
                         Thread.sleep(50);
                     }
-                    if (!stopRequested && thisPlayback == playbackId) {
+
+                    if (!isCurrentPlayback(thisPlayback)) {
+                        break;
+                    }
+
+                    count = decoded.read(buffer, 0, buffer.length);
+                    if (count < 0) {
+                        break;
+                    }
+
+                    if (count > 0 && isCurrentPlayback(thisPlayback)) {
                         output.write(buffer, 0, count);
                     }
                 }
 
-                if (!stopRequested && thisPlayback == playbackId) {
+                if (isCurrentPlayback(thisPlayback)) {
                     output.drain();
                 }
             }
         } catch (Exception exception) {
-            if (thisPlayback == playbackId && !stopRequested) {
-                System.err.println("[Crystal Radio] Could not play " + file + ": " + exception.getMessage());
+            if (isCurrentPlayback(thisPlayback)) {
+                System.err.println("[Crystal Radio] Could not play track: " + file);
+                exception.printStackTrace(System.err);
             }
         } finally {
-            if (output != null) {
-                output.stop();
-                output.close();
-            }
-            if (thisPlayback == playbackId) {
-                line = null;
-                playing = false;
-                paused = false;
-                currentTrack = null;
-                worker = null;
+            closeLine(output);
+
+            synchronized (this) {
+                if (thisPlayback == playbackId) {
+                    line = null;
+                    playing = false;
+                    paused = false;
+                    currentTrack = null;
+                    worker = null;
+                }
             }
         }
     }
 
+    private boolean isCurrentPlayback(long id) {
+        return id == playbackId;
+    }
+
+    private void closeLine(SourceDataLine audioLine) {
+        if (audioLine == null) {
+            return;
+        }
+
+        try {
+            audioLine.stop();
+        } catch (RuntimeException ignored) {
+        }
+
+        try {
+            audioLine.flush();
+        } catch (RuntimeException ignored) {
+        }
+
+        try {
+            audioLine.close();
+        } catch (RuntimeException ignored) {
+        }
+    }
+
     public synchronized void togglePause() {
-        if (!playing) return;
+        if (!playing) {
+            return;
+        }
+
         paused = !paused;
         SourceDataLine activeLine = line;
+
         if (activeLine != null) {
-            if (paused) activeLine.stop();
-            else activeLine.start();
+            try {
+                if (paused) {
+                    activeLine.stop();
+                } else {
+                    activeLine.start();
+                }
+            } catch (RuntimeException exception) {
+                System.err.println("[Crystal Radio] Could not change pause state.");
+                exception.printStackTrace(System.err);
+            }
         }
     }
 
     public synchronized void stop() {
         playbackId++;
-        stopRequested = true;
+
         paused = false;
-        SourceDataLine activeLine = line;
-        line = null;
-        if (activeLine != null) {
-            activeLine.stop();
-            activeLine.flush();
-            activeLine.close();
-        }
         playing = false;
         currentTrack = null;
+
+        Thread oldWorker = worker;
         worker = null;
+
+        SourceDataLine activeLine = line;
+        line = null;
+
+        closeLine(activeLine);
+
+        if (oldWorker != null && oldWorker != Thread.currentThread()) {
+            oldWorker.interrupt();
+        }
     }
 
     public boolean isPlaying() {
