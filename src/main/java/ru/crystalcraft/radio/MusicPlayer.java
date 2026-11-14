@@ -17,6 +17,7 @@ public final class MusicPlayer {
     private volatile boolean paused;
     private volatile boolean playing;
     private volatile Path currentTrack;
+    private volatile float volume = 0.70f;
 
     private MusicPlayer() {
     }
@@ -102,6 +103,7 @@ public final class MusicPlayer {
                     }
 
                     if (count > 0 && isCurrentPlayback(thisPlayback)) {
+                        applyVolume(buffer, count, volume);
                         output.write(buffer, 0, count);
                     }
                 }
@@ -194,6 +196,31 @@ public final class MusicPlayer {
 
         if (oldWorker != null && oldWorker != Thread.currentThread()) {
             oldWorker.interrupt();
+        }
+    }
+
+    public void setVolume(float newVolume) {
+        volume = Math.max(0.0f, Math.min(1.0f, newVolume));
+    }
+
+    public float getVolume() {
+        return volume;
+    }
+
+    // The decoded stream is signed 16-bit little-endian PCM.
+    // Applying gain to the samples works even when the audio device does not
+    // expose a hardware MASTER_GAIN control.
+    private static void applyVolume(byte[] samples, int length, float gain) {
+        if (gain >= 0.999f) {
+            return;
+        }
+
+        for (int i = 0; i + 1 < length; i += 2) {
+            int sample = (short) ((samples[i] & 0xFF) | (samples[i + 1] << 8));
+            int adjusted = Math.round(sample * gain);
+            adjusted = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, adjusted));
+            samples[i] = (byte) (adjusted & 0xFF);
+            samples[i + 1] = (byte) ((adjusted >>> 8) & 0xFF);
         }
     }
 
