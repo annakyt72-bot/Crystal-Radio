@@ -7,8 +7,16 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.SourceDataLine;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class MusicPlayer {
+    public enum PlaybackMode {
+        SEQUENTIAL,
+        REPEAT_ONE,
+        SHUFFLE
+    }
+
     private static final MusicPlayer INSTANCE = new MusicPlayer();
 
     private volatile SourceDataLine line;
@@ -18,6 +26,9 @@ public final class MusicPlayer {
     private volatile boolean playing;
     private volatile Path currentTrack;
     private volatile float volume = 0.70f;
+    private volatile List<Path> playlist = List.of();
+    private volatile int playlistIndex = -1;
+    private volatile PlaybackMode playbackMode = PlaybackMode.SEQUENTIAL;
 
     private MusicPlayer() {
     }
@@ -35,6 +46,10 @@ public final class MusicPlayer {
         stop();
 
         Path track = file.toAbsolutePath().normalize();
+        int foundIndex = playlist.indexOf(track);
+        if (foundIndex >= 0) {
+            playlistIndex = foundIndex;
+        }
         long thisPlayback = ++playbackId;
 
         paused = false;
@@ -52,6 +67,7 @@ public final class MusicPlayer {
 
     private void playFile(Path file, long thisPlayback) {
         SourceDataLine output = null;
+        boolean reachedEnd = false;
 
         try (AudioInputStream source = AudioSystem.getAudioInputStream(file.toFile())) {
             AudioFormat sourceFormat = source.getFormat();
@@ -99,6 +115,7 @@ public final class MusicPlayer {
 
                     count = decoded.read(buffer, 0, buffer.length);
                     if (count < 0) {
+                        reachedEnd = true;
                         break;
                     }
 
@@ -120,6 +137,7 @@ public final class MusicPlayer {
         } finally {
             closeLine(output);
 
+            boolean shouldAdvance = false;
             synchronized (this) {
                 if (thisPlayback == playbackId) {
                     line = null;
@@ -127,8 +145,54 @@ public final class MusicPlayer {
                     paused = false;
                     currentTrack = null;
                     worker = null;
+                    shouldAdvance = reachedEnd;
                 }
             }
+
+            if (shouldAdvance) {
+                playNextAutomatically(thisPlayback);
+            }
+        }
+    }
+
+    private void playNextAutomatically(long finishedPlaybackId) {
+        Path nextTrack = null;
+
+        synchronized (this) {
+            if (playbackId != finishedPlaybackId || playlist.isEmpty()) {
+                return;
+            }
+
+            switch (playbackMode) {
+                case REPEAT_ONE -> {
+                    if (playlistIndex >= 0 && playlistIndex < playlist.size()) {
+                        nextTrack = playlist.get(playlistIndex);
+                    }
+                }
+                case SHUFFLE -> {
+                    if (playlist.size() == 1) {
+                        nextTrack = playlist.get(0);
+                    } else if (playlist.size() > 1) {
+                        int nextIndex = ThreadLocalRandom.current().nextInt(playlist.size() - 1);
+                        if (nextIndex >= playlistIndex) {
+                            nextIndex++;
+                        }
+                        playlistIndex = nextIndex;
+                        nextTrack = playlist.get(nextIndex);
+                    }
+                }
+                case SEQUENTIAL -> {
+                    int nextIndex = playlistIndex + 1;
+                    if (nextIndex >= 0 && nextIndex < playlist.size()) {
+                        playlistIndex = nextIndex;
+                        nextTrack = playlist.get(nextIndex);
+                    }
+                }
+            }
+        }
+
+        if (nextTrack != null) {
+            play(nextTrack);
         }
     }
 
@@ -197,6 +261,38 @@ public final class MusicPlayer {
         if (oldWorker != null && oldWorker != Thread.currentThread()) {
             oldWorker.interrupt();
         }
+    }
+
+    public synchronized void setPlaylist(List<Path> tracks) {
+        playlist = tracks.stream()
+            .filter(path -> path != null)
+            .map(path -> path.toAbsolutePath().normalize())
+            .toList();
+
+        Path current = currentTrack;
+        if (current != null) {
+            playlistIndex = playlist.indexOf(current);
+        } else if (playlistIndex >= playlist.size()) {
+            playlistIndex = -1;
+        }
+    }
+
+    public synchronized PlaybackMode getPlaybackMode() {
+        return playbackMode;
+    }
+
+    public synchronized PlaybackMode cyclePlaybackMode() {
+        PlaybackMode[] modes = PlaybackMode.values();
+        playbackMode = modes[(playbackMode.ordinal() + 1) % modes.length];
+        return playbackMode;
+    }
+
+    public synchronized String getPlaybackModeLabel() {
+        return switch (playbackMode) {
+            case SEQUENTIAL -> "Порядок";
+            case REPEAT_ONE -> "Повтор 1";
+            case SHUFFLE -> "Случайно";
+        };
     }
 
     public void setVolume(float newVolume) {
