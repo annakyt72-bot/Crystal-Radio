@@ -250,7 +250,10 @@ public final class RadioScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        renderBackground(graphics, mouseX, mouseY, delta);
+        // Do not call Screen.renderBackground here: in this Minecraft build it
+        // can request the blur effect more than once in a frame and crash with
+        // "Can only blur once per frame". A simple translucent fill is safe.
+        graphics.fill(0, 0, this.width, this.height, 0xC0101010);
 
         int centerX = this.width / 2;
         int listWidth = Math.max(120, Math.min(340, this.width - 40));
