@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "crystal_radio",
-  "version": "${version}",
+  "version": "1.0.1",
   "name": "Crystal Radio",
   "description": "A simple in-game music library screen.",
   "authors": ["CrystalCraft"],
