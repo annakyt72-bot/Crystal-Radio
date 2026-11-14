@@ -28,6 +28,12 @@ public final class RadioScreen extends Screen {
 
     private Button previousPageButton;
     private Button nextPageButton;
+    private static final int CRYSTAL_DARK = 0xE90B0820;
+    private static final int CRYSTAL_PANEL = 0xD51B1238;
+    private static final int CRYSTAL_PURPLE = 0xFF8B5CF6;
+    private static final int CRYSTAL_CYAN = 0xFF55DDF5;
+    private static final int CRYSTAL_TEXT = 0xFFF4EEFF;
+    private boolean draggingVolume;
 
     public RadioScreen() {
         super(Component.literal("Crystal Radio"));
@@ -253,20 +259,48 @@ public final class RadioScreen extends Screen {
         // Do not call Screen.renderBackground here: in this Minecraft build it
         // can request the blur effect more than once in a frame and crash with
         // "Can only blur once per frame". A simple translucent fill is safe.
-        graphics.fill(0, 0, this.width, this.height, 0xC0101010);
+        graphics.fill(0, 0, this.width, this.height, 0xE8050614);
 
         int centerX = this.width / 2;
-        int listWidth = Math.max(120, Math.min(340, this.width - 40));
+        int listWidth = Math.max(120, Math.min(340, this.width - 100));
+        int panelLeft = centerX - listWidth / 2 - 12;
+        int panelRight = centerX + listWidth / 2 + 12;
 
-        graphics.drawCenteredString(this.font, "CRYSTAL RADIO", centerX, 12, 0xFFFFFF);
-        graphics.drawCenteredString(this.font, "Моя музыка", centerX, 56, 0xFFFFFF);
+        // CrystalCraft-inspired purple crystal panel with cyan accents.
+        graphics.fill(panelLeft, 6, panelRight, this.height - 6, CRYSTAL_DARK);
+        graphics.fill(panelLeft, 6, panelRight, 8, CRYSTAL_CYAN);
+        graphics.fill(panelLeft, 8, panelLeft + 2, this.height - 8, CRYSTAL_PURPLE);
+        graphics.fill(panelRight - 2, 8, panelRight, this.height - 8, CRYSTAL_PURPLE);
+        graphics.fill(panelLeft + 2, 9, panelRight - 2, this.height - 9, CRYSTAL_PANEL);
+
+        graphics.drawCenteredString(this.font, "✦ CRYSTAL RADIO ✦", centerX, 15, CRYSTAL_CYAN);
+        graphics.drawCenteredString(this.font, "Моя музыка", centerX, 56, CRYSTAL_TEXT);
         graphics.drawString(
             this.font,
             "Форматы: MP3, OGG, WAV",
             centerX - listWidth / 2,
             80,
-            0xAAAAAA
+            CRYSTAL_CYAN
         );
+
+        // Vertical volume control on the left: + at the top, - at the bottom.
+        int volumeX = panelLeft + 18;
+        int volumeTop = 132;
+        int volumeHeight = Math.min(150, Math.max(90, this.height - 270));
+        int volumeBottom = volumeTop + volumeHeight;
+        float volume = MusicPlayer.getInstance().getVolume();
+        int filledTop = volumeBottom - Math.round(volumeHeight * volume);
+
+        graphics.drawCenteredString(this.font, "+", volumeX + 5, volumeTop - 25, CRYSTAL_CYAN);
+        graphics.fill(volumeX + 2, volumeTop, volumeX + 8, volumeBottom, 0xFF392B58);
+        graphics.fill(volumeX + 2, filledTop, volumeX + 8, volumeBottom, CRYSTAL_PURPLE);
+        graphics.fill(volumeX, filledTop - 3, volumeX + 10, filledTop + 3, CRYSTAL_CYAN);
+        graphics.drawCenteredString(this.font, "-", volumeX + 5, volumeBottom + 8, CRYSTAL_CYAN);
+        graphics.drawCenteredString(this.font, Math.round(volume * 100) + "%", volumeX + 5, volumeBottom + 22, CRYSTAL_TEXT);
+
+        // Accent strips behind the main controls.
+        graphics.fill(centerX - 108, this.height - 66, centerX + 108, this.height - 40, 0xFF342253);
+        graphics.fill(centerX - 96, this.height - 37, centerX + 96, this.height - 35, CRYSTAL_CYAN);
 
         super.render(graphics, mouseX, mouseY, delta);
 
@@ -281,14 +315,70 @@ public final class RadioScreen extends Screen {
             nowPlaying = "Играет: " + current.getFileName();
         }
 
-        graphics.drawCenteredString(this.font, nowPlaying, centerX, this.height - 45, 0xDDDDDD);
+        graphics.drawCenteredString(this.font, nowPlaying, centerX, this.height - 45, CRYSTAL_TEXT);
         graphics.drawCenteredString(
             this.font,
             (page + 1) + " / " + getPageCount(),
             centerX,
             this.height - 12,
-            0xFFFFFF
+            CRYSTAL_CYAN
         );
+    }
+
+    private void setVolumeFromMouse(double mouseY) {
+        int volumeTop = 132;
+        int volumeHeight = Math.min(150, Math.max(90, this.height - 270));
+        float value = 1.0f - (float) (mouseY - volumeTop) / volumeHeight;
+        MusicPlayer.getInstance().setVolume(value);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        int panelLeft = this.width / 2 - Math.max(120, Math.min(340, this.width - 100)) / 2 - 12;
+        int volumeX = panelLeft + 18;
+        int volumeTop = 132;
+        int volumeBottom = volumeTop + Math.min(150, Math.max(90, this.height - 270));
+
+        if (button == 0 && mouseX >= volumeX - 8 && mouseX <= volumeX + 18
+            && mouseY >= volumeTop && mouseY <= volumeBottom) {
+            draggingVolume = true;
+            setVolumeFromMouse(mouseY);
+            return true;
+        }
+
+        if (button == 0 && mouseX >= volumeX - 12 && mouseX <= volumeX + 22
+            && mouseY >= volumeTop - 30 && mouseY < volumeTop) {
+            MusicPlayer.getInstance().setVolume(MusicPlayer.getInstance().getVolume() + 0.05f);
+            return true;
+        }
+
+        if (button == 0 && mouseX >= volumeX - 12 && mouseX <= volumeX + 22
+            && mouseY > volumeBottom && mouseY <= volumeBottom + 24) {
+            MusicPlayer.getInstance().setVolume(MusicPlayer.getInstance().getVolume() - 0.05f);
+            return true;
+        }
+
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (draggingVolume && button == 0) {
+            setVolumeFromMouse(mouseY);
+            return true;
+        }
+
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingVolume) {
+            draggingVolume = false;
+            return true;
+        }
+
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
